@@ -1,5 +1,5 @@
 # lwcFxJs
-함수형 프로그래밍 라이브러리
+함수형 프로그래밍 라이브러리 Fxjs를 Lwc에서 사용하도록 패키징
 
 ## 참고
 fxjs(https://github.com/marpple/FxJS)
@@ -12,7 +12,6 @@ fxjs(https://github.com/marpple/FxJS)
 - 결정적으로 for문이 2 depth 이상깊어진다면, 유지보수가 쉽지 않아진다.(이해가 쉽지않다.)
 
 ## 함수형 프로그래밍 간단 정리.
-
 ### 함수의 기본 특징.
 
  - 일급
@@ -114,14 +113,14 @@ go(
 	 * @returns {Promise<*>}
 	 */
 	batchApexChunkParallelRace: async ({
-										   context = undefined,
-										   apex = undefined,
-										   data = [],
-										   chunkCount = 200,
-										   chunkLimit = 5,
-										   batchLimit = 5,
-										   useLogging = false
-									   }) => {
+		context = undefined,
+		apex = undefined,
+		data = [],
+		chunkCount = 200,
+		chunkLimit = 5,
+		batchLimit = 5,
+		useLogging = false
+	}) => {
 		const chunkByData = _.chunk(chunkCount, data); //데이터를 200개씩 쪼갠다. 
 		const fs = chunkByData.map((data, index) => {
 			return ApService._generateAsyncApex({
