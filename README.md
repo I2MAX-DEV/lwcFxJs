@@ -99,3 +99,96 @@ go(
 ```
 ![스크린샷 2022-07-08 오후 5 46 33](https://user-images.githubusercontent.com/17538535/177954931-7cfa9001-fd52-454f-9b53-384351b293cc.png)
 
+
+```javascript
+// LWC 대용량 데이터 순차적 병렬 Apex 요청 실 예제.
+/**
+	 * @desc 한 Apex 요청에 대해 대용량 병렬 분할 요청을 처리.
+	 * @param { any } context // 실행 Context - this
+	 * @param { any[] } data // 전체 데이터
+	 * @param { any } apex // Apex Method
+	 * @param { number } chunkCount // 한 요청에 대한 데이터 분할 갯수 - 초기값 200
+	 * @param { number } chunkLimit // 한 병렬 요소당 몇개씩 요청을 담을 지 묶음 갯수
+	 * @param { number } batchLimit // 병렬 요청 갯수
+	 * @param { boolean } useLogging // 병렬 요청 갯수
+	 * @returns {Promise<*>}
+	 */
+	batchApexChunkParallelRace: async ({
+										   context = undefined,
+										   apex = undefined,
+										   data = [],
+										   chunkCount = 200,
+										   chunkLimit = 5,
+										   batchLimit = 5,
+										   useLogging = false
+									   }) => {
+		const chunkByData = _.chunk(chunkCount, data); //데이터를 200개씩 쪼갠다. 
+		const fs = chunkByData.map((data, index) => {
+			return ApService._generateAsyncApex({
+				context,
+				useLogging,
+				apex,
+				param: data,
+				index,
+				totalCount: data.length
+			});
+		});
+
+		return await _.go(
+			fs,
+			L.chunk(chunkLimit), // 함수로 이뤄진 배열을 chunkLimit값으로 쪼갠다. Lazy이므로 지연.
+			L.map((fsChunk) => ApService._race(fsChunk, useLogging)), // 쪼개진걸 가지고 병렬처리 함수배열 만든다. Lazy이므로 지연.
+			C.takeAll(batchLimit) // 위의 미뤄진 결과값을 batchLimit값만큼 순차적으로 내부 배열값만큼 병렬로 지연평가 처리
+		);
+	},
+
+	/**
+	 *
+	 * @param { any } context
+	 * @param { boolean } useLogging
+	 * @param { any } apex
+	 * @param { any } param
+	 * @param { number } index
+	 * @param { number } totalCount
+	 * @returns {(function(): Promise<*|boolean|undefined>)|*}
+	 * @private
+	 */
+	_generateAsyncApex: ({context, useLogging, apex, param, index = 0, totalCount = 0}) => {
+		const hasContext = context && typeof context['requestIndex'] === 'number';
+		return async () => {
+			try {
+				if (hasContext && useLogging) console.log(`start upload idx : ${index}(${totalCount})`);
+				const result = await apex({param});
+				if (result) {
+					if (hasContext) context['requestIndex']++;
+					if (useLogging) console.log(`${index} result : ${result}`);
+					return result;
+				}
+			} catch (e) {
+				if (useLogging) console.error('Error : ', e);
+				return false;
+			}
+		};
+	},
+
+	_race: (fs, useLogging = false) => {
+		return new Promise((resolve, reject) => {
+			if (useLogging) console.log('=========================');
+			let res = [];
+			Promise.all(
+				[...fs].map(async (a) => {
+					try {
+						const b = await a();
+						res.push(b);
+						if (res.length === fs.length) resolve(res);
+						return b;
+					} catch (e) {
+						if (e) throw e;
+					}
+				})
+			)
+				.then((_) => resolve(res))
+				.catch(reject);
+		});
+	},
+```
